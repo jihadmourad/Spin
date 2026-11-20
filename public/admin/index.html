@@ -59,7 +59,7 @@
         <div class="toolbar">
           <input type="text" id="search" placeholder="بحث بالاسم أو الهاتف" aria-label="بحث">
           <span class="spacer"></span>
-          <button type="button" class="btn-export" id="export-btn">تصدير Excel</button>
+          <button type="button" class="btn-export" id="export-btn">تصدير كل البيانات (Excel)</button>
         </div>
         <div class="table-scroll">
           <table>
@@ -67,6 +67,7 @@
               <tr>
                 <th>الاسم</th>
                 <th>الهاتف</th>
+                <th>الحالة</th>
                 <th>الجائزة</th>
                 <th>تاريخ المشاركة</th>
                 <th>نقر على التقييم</th>
@@ -79,17 +80,22 @@
         <p class="ok-msg" id="entries-count"></p>
       </section>
 
-      <!-- Wheel segments -->
+      <!-- Wheel fields -->
       <section class="panel" id="tab-wheel">
-        <p>كل خانة لها نسبة (%) تحدد احتمال ظهورها. مجموع النسب للخانات الفعّالة يجب أن يكون 100%.</p>
+        <p>كل خانة لها نسبة (%) تحدد احتمال ظهورها على العجلة. فعّل "تُحسب كفوز" للخانات التي تعتبر جائزة، واتركها غير مفعّلة للخانات مثل "حاول مرة أخرى".</p>
         <p class="total-line" id="seg-total"></p>
+        <p class="total-line" id="seg-winchance"></p>
+        <p class="limit-note" id="seg-limit"></p>
         <div class="table-scroll">
           <table class="seg-table">
             <thead>
               <tr>
                 <th>الترتيب</th>
-                <th>اسم الخانة</th>
+                <th>الاسم (عربي)</th>
+                <th>Name (English)</th>
                 <th>النسبة %</th>
+                <th>نسبة الظهور</th>
+                <th>تُحسب كفوز</th>
                 <th>فعّالة</th>
                 <th></th>
               </tr>
@@ -99,8 +105,10 @@
         </div>
         <h3 style="margin-top:28px;">إضافة خانة</h3>
         <form id="seg-add" class="form-card" novalidate>
-          <label><span>اسم الخانة</span><input type="text" name="label" maxlength="40" required></label>
+          <label><span>الاسم (عربي)</span><input type="text" name="label" maxlength="40" required></label>
+          <label><span>Name (English)</span><input type="text" name="labelEn" maxlength="40" dir="ltr"></label>
           <label><span>النسبة %</span><input type="number" name="weight" min="0" max="100" step="1" value="10" required></label>
+          <label style="display:flex;gap:8px;align-items:center;"><input type="checkbox" name="isWin" checked style="width:auto;"> <span>تُحسب كفوز</span></label>
           <p class="error" id="seg-add-error" role="alert" hidden></p>
           <button class="btn btn-primary" type="submit">إضافة</button>
         </form>
@@ -109,6 +117,7 @@
       <!-- Settings -->
       <section class="panel" id="tab-settings">
         <form id="settings-form" class="form-card" novalidate>
+          <label><span>عدد خانات العجلة (من 2 إلى 12)</span><input type="number" name="max_wheel_fields" min="2" max="12" step="1" required></label>
           <label><span>رابط Instagram</span><input type="text" name="instagram_url" dir="ltr"></label>
           <label><span>رابط Facebook</span><input type="text" name="facebook_url" dir="ltr"></label>
           <label><span>رابط تقييم Google</span><input type="text" name="google_review_url" dir="ltr"></label>

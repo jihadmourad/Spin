@@ -45,6 +45,12 @@
     return el('span', { class: 'badge ' + (on ? 'yes' : 'no'), text: on ? 'نعم' : 'لا' });
   }
 
+  function statusClass(status) {
+    if (status === 'تم الدوران') return 'yes';
+    if (status === 'جاهز للدوران') return 'ready';
+    return 'no';
+  }
+
   function showLogin() {
     $('app-view').hidden = true;
     $('login-view').hidden = false;
@@ -126,7 +132,8 @@
         body.appendChild(el('tr', null, [
           el('td', { text: r.name }),
           el('td', { class: 'ltr', text: r.phone }),
-          el('td', { text: r.prize_label }),
+          el('td', null, [el('span', { class: 'badge ' + statusClass(r.status), text: r.status })]),
+          el('td', { text: r.prize_label || '—' }),
           el('td', { text: fmtDate(r.spun_at) }),
           el('td', null, [badge(!!r.review_clicked_at)]),
           el('td', null, [badge(!!r.review_confirmed_at)]),
@@ -137,13 +144,13 @@
   }
 
   $('export-btn').addEventListener('click', function () {
-    fetch('/api/admin/entries/export.xlsx', { credentials: 'same-origin' }).then(function (res) {
+    fetch('/api/admin/export.xlsx', { credentials: 'same-origin' }).then(function (res) {
       if (res.status === 401) { showLogin(); throw new Error('session'); }
       if (!res.ok) throw new Error('فشل التصدير');
       return res.blob();
     }).then(function (blob) {
       var url = URL.createObjectURL(blob);
-      var a = el('a', { href: url, download: 'rassif-spin-entries.xlsx' });
+      var a = el('a', { href: url, download: 'rassif-spin-export.xlsx' });
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -151,24 +158,34 @@
     }).catch(function (err) { if (err.message !== 'session') alert(err.message); });
   });
 
-  // ---- wheel segments ----
-  var segState = { segments: [] };
+  // ---- wheel fields ----
+  var segState = { segments: [], maxFields: 4 };
 
   function loadSegments() {
-    api('GET', '/api/admin/segments').then(function (d) {
-      segState.segments = d.segments;
-      renderSegments(d.totalWeight);
-    }).catch(function () {});
+    api('GET', '/api/admin/segments').then(applySegmentData).catch(function () {});
   }
 
-  function renderSegments(totalWeight) {
+  function applySegmentData(d) {
+    segState.segments = d.segments;
+    segState.maxFields = d.maxFields;
+    renderSegments(d);
+  }
+
+  function fmtPct(n) {
+    return (Math.round(n * 10) / 10) + '%';
+  }
+
+  function renderSegments(d) {
     var body = $('seg-body');
     body.textContent = '';
     var segs = segState.segments;
     segs.forEach(function (s, i) {
-      var label = el('input', { type: 'text', value: s.label, maxlength: '40' });
-      var weight = el('input', { type: 'number', min: '0', max: '100', step: '1', value: String(s.weight) });
-      var active = el('input', { type: 'checkbox' });
+      var label = el('input', { type: 'text', value: s.label, maxlength: '40', 'aria-label': 'الاسم بالعربية' });
+      var labelEn = el('input', { type: 'text', value: s.labelEn || '', maxlength: '40', dir: 'ltr', 'aria-label': 'English name' });
+      var weight = el('input', { type: 'number', min: '0', max: '100', step: '1', value: String(s.weight), 'aria-label': 'النسبة' });
+      var isWin = el('input', { type: 'checkbox', 'aria-label': 'تُحسب كفوز' });
+      isWin.checked = !!s.isWin;
+      var active = el('input', { type: 'checkbox', 'aria-label': 'فعّالة' });
       active.checked = !!s.active;
       var up = el('button', { type: 'button', class: 'btn btn-small', text: '↑', title: 'أعلى' });
       var down = el('button', { type: 'button', class: 'btn btn-small', text: '↓', title: 'أسفل' });
@@ -180,29 +197,45 @@
       var del = el('button', { type: 'button', class: 'btn btn-small btn-danger', text: 'حذف' });
       save.addEventListener('click', function () {
         api('PUT', '/api/admin/segments/' + s.id, {
-          label: label.value.trim(), weight: Number(weight.value), active: active.checked,
-        }).then(function (d) { segState.segments = d.segments; renderSegments(d.totalWeight); })
-          .catch(function (err) { alert(err.message); });
+          label: label.value.trim(),
+          labelEn: labelEn.value.trim(),
+          weight: Number(weight.value),
+          active: active.checked,
+          isWin: isWin.checked,
+        }).then(applySegmentData).catch(function (err) { alert(err.message); });
       });
       del.addEventListener('click', function () {
         if (!confirm('حذف الخانة "' + s.label + '"؟')) return;
-        api('DELETE', '/api/admin/segments/' + s.id).then(function (d) {
-          segState.segments = d.segments; renderSegments(d.totalWeight);
-        }).catch(function (err) { alert(err.message); });
+        api('DELETE', '/api/admin/segments/' + s.id).then(applySegmentData).catch(function (err) { alert(err.message); });
       });
+      var chance = s.active ? fmtPct(s.chance) : '—';
       body.appendChild(el('tr', null, [
         el('td', null, [up, down]),
         el('td', null, [label]),
+        el('td', null, [labelEn]),
         el('td', null, [weight]),
+        el('td', { class: 'ltr', text: chance }),
+        el('td', null, [isWin]),
         el('td', null, [active]),
         el('td', null, [save, el('span', { text: ' ' }), del]),
       ]));
     });
 
     var line = $('seg-total');
-    line.textContent = 'مجموع النسب للخانات الفعّالة: ' + totalWeight + '%';
-    line.classList.toggle('warn', totalWeight !== 100);
-    if (totalWeight !== 100) line.textContent += ' (يجب أن يكون 100%)';
+    line.textContent = 'مجموع النسب للخانات الفعّالة: ' + d.totalWeight + '%';
+    line.classList.toggle('warn', d.totalWeight !== 100);
+    if (d.totalWeight !== 100) line.textContent += ' (يجب أن يكون 100%)';
+
+    var win = $('seg-winchance');
+    win.textContent = 'نسبة الفوز الإجمالية: ' + fmtPct(d.winChance);
+
+    var full = segs.length >= segState.maxFields;
+    $('seg-limit').textContent = 'عدد الخانات الحالي: ' + segs.length + ' من أصل ' + segState.maxFields + ' (يمكن تغييره من تبويب الروابط)';
+    $('seg-add').hidden = full;
+    if (full) {
+      $('seg-add-error').textContent = '';
+      $('seg-add-error').hidden = true;
+    }
   }
 
   function move(index, dir) {
@@ -211,8 +244,7 @@
     if (j < 0 || j >= segs.length) return;
     var tmp = segs[index]; segs[index] = segs[j]; segs[j] = tmp;
     api('POST', '/api/admin/segments/reorder', { ids: segs.map(function (s) { return s.id; }) })
-      .then(function (d) { segState.segments = d.segments; renderSegments(d.totalWeight); })
-      .catch(function (err) { alert(err.message); });
+      .then(applySegmentData).catch(function (err) { alert(err.message); });
   }
 
   $('seg-add').addEventListener('submit', function (e) {
@@ -220,12 +252,17 @@
     var f = e.target;
     $('seg-add-error').hidden = true;
     api('POST', '/api/admin/segments', {
-      label: f.label.value.trim(), weight: Number(f.weight.value), active: true,
+      label: f.label.value.trim(),
+      labelEn: f.labelEn.value.trim(),
+      weight: Number(f.weight.value),
+      isWin: f.isWin.checked,
+      active: true,
     }).then(function (d) {
       f.label.value = '';
+      f.labelEn.value = '';
       f.weight.value = '10';
-      segState.segments = d.segments;
-      renderSegments(d.totalWeight);
+      f.isWin.checked = true;
+      applySegmentData(d);
     }).catch(function (err) { $('seg-add-error').textContent = err.message; $('seg-add-error').hidden = false; });
   });
 
@@ -233,6 +270,9 @@
   function loadSettings() {
     api('GET', '/api/admin/settings').then(function (s) {
       var f = $('settings-form');
+      f.max_wheel_fields.value = s.max_wheel_fields;
+      f.max_wheel_fields.min = s.minWheelFields;
+      f.max_wheel_fields.max = s.maxWheelFieldsLimit;
       f.instagram_url.value = s.instagram_url || '';
       f.facebook_url.value = s.facebook_url || '';
       f.google_review_url.value = s.google_review_url || '';
@@ -245,11 +285,14 @@
     $('settings-error').hidden = true;
     $('settings-ok').hidden = true;
     api('PUT', '/api/admin/settings', {
+      max_wheel_fields: Number(f.max_wheel_fields.value),
       instagram_url: f.instagram_url.value.trim(),
       facebook_url: f.facebook_url.value.trim(),
       google_review_url: f.google_review_url.value.trim(),
-    }).then(function () { $('settings-ok').hidden = false; })
-      .catch(function (err) { $('settings-error').textContent = err.message; $('settings-error').hidden = false; });
+    }).then(function () {
+      $('settings-ok').hidden = false;
+      loadSegments();
+    }).catch(function (err) { $('settings-error').textContent = err.message; $('settings-error').hidden = false; });
   });
 
   // ---- users ----

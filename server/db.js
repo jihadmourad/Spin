@@ -16,6 +16,12 @@ function openDatabase(dbPath = process.env.DB_PATH || DEFAULT_DB_PATH) {
   return db;
 }
 
+// Adds a column to an existing table when it is missing (databases created by earlier versions).
+function ensureColumn(db, table, column, ddl) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
+  if (!cols.includes(column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
+}
+
 function migrate(db) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS admins (
@@ -45,11 +51,12 @@ function migrate(db) {
       public_token        TEXT    NOT NULL UNIQUE,
       name                TEXT    NOT NULL,
       phone               TEXT    NOT NULL UNIQUE,
-      segment_id          INTEGER REFERENCES segments(id) ON DELETE SET NULL,
-      prize_label         TEXT    NOT NULL,
-      spun_at             TEXT    NOT NULL DEFAULT (datetime('now')),
+      created_at          TEXT    NOT NULL DEFAULT (datetime('now')),
       review_clicked_at   TEXT,
-      review_confirmed_at TEXT
+      review_confirmed_at TEXT,
+      segment_id          INTEGER REFERENCES segments(id) ON DELETE SET NULL,
+      prize_label         TEXT,
+      spun_at             TEXT
     );
 
     CREATE TABLE IF NOT EXISTS settings (
@@ -58,26 +65,42 @@ function migrate(db) {
     );
   `);
 
+  // Columns added after the first release.
+  ensureColumn(db, 'segments', 'label_en', "label_en TEXT NOT NULL DEFAULT ''");
+  ensureColumn(db, 'segments', 'is_win', 'is_win INTEGER NOT NULL DEFAULT 1');
+  ensureColumn(db, 'entries', 'prize_label_en', 'prize_label_en TEXT');
+
+  // Starting prizes from the first release get their English names, if they have none yet.
+  const defaultsEn = {
+    'قهوة مجانية': 'Free coffee',
+    'خصم 10%': '10% off',
+    'حلوى مجانية': 'Free dessert',
+    'هدية مفاجئة': 'Surprise gift',
+    'حاول مرة أخرى': 'Try again',
+  };
+  const setEn = db.prepare("UPDATE segments SET label_en = ? WHERE label = ? AND label_en = ''");
+  for (const [ar, en] of Object.entries(defaultsEn)) setEn.run(en, ar);
+
   const segCount = db.prepare('SELECT COUNT(*) AS n FROM segments').get().n;
   if (segCount === 0) {
-    // Placeholder wheel. Weights are percentages and should total 100.
-    // Edit everything from the admin dashboard.
+    // Starting wheel. Weights are percentages and should total 100.
+    // is_win = 0 marks a field that does not count as a win ("try again").
+    // Everything is editable from the admin dashboard.
     const seed = [
-      ['قهوة مجانية', 20],
-      ['خصم 10%', 25],
-      ['حلوى مجانية', 10],
-      ['مشروب مجاني', 15],
-      ['حاول مرة أخرى', 25],
-      ['هدية مفاجئة', 5],
+      ['قهوة مجانية', 'Free coffee', 30, 1],
+      ['خصم 10%', '10% off', 30, 1],
+      ['حلوى مجانية', 'Free dessert', 20, 1],
+      ['حاول مرة أخرى', 'Try again', 20, 0],
     ];
-    const ins = db.prepare('INSERT INTO segments (label, weight, position) VALUES (?, ?, ?)');
-    seed.forEach(([label, weight], i) => ins.run(label, weight, i));
+    const ins = db.prepare('INSERT INTO segments (label, label_en, weight, position, is_win) VALUES (?, ?, ?, ?, ?)');
+    seed.forEach(([ar, en, weight, win], i) => ins.run(ar, en, weight, i, win));
   }
 
   const settingDefaults = {
     instagram_url: 'https://www.instagram.com/p/DfjzQzfIGbZ/',
     facebook_url: 'https://www.facebook.com/share/1EGWxtRQPX/',
     google_review_url: 'https://g.page/r/CRSQUQQ37K15EBM/review',
+    max_wheel_fields: '4',
   };
   const setDefault = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
   for (const [k, v] of Object.entries(settingDefaults)) setDefault.run(k, v);

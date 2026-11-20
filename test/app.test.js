@@ -2,6 +2,7 @@
 
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
+const ExcelJS = require('exceljs');
 const { openDatabase, hashPassword } = require('../server/db');
 const { createApp, normalizePhone, cleanName, pickWinningSegment } = require('../server/app');
 
@@ -29,15 +30,21 @@ async function req(path, { method = 'GET', body, cookie } = {}) {
   const headers = {};
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   if (cookie) headers.Cookie = cookie;
-  const res = await fetch(base + path, { method, headers, body: body !== undefined ? JSON.stringify(body) : undefined });
-  return res;
+  return fetch(base + path, { method, headers, body: body !== undefined ? JSON.stringify(body) : undefined });
 }
 
 async function login(username, password) {
   const res = await req('/api/admin/login', { method: 'POST', body: { username, password } });
-  const setCookie = res.headers.get('set-cookie') || '';
-  const cookie = setCookie.split(';')[0];
+  const cookie = (res.headers.get('set-cookie') || '').split(';')[0];
   return { res, cookie };
+}
+
+// Registers a customer, confirms the review, and spins. Returns the spin response.
+async function completeFlow(name, phone) {
+  const reg = await (await req('/api/entries', { method: 'POST', body: { name, phone } })).json();
+  await req('/api/review/click', { method: 'POST', body: { token: reg.token } });
+  await req('/api/review/confirm', { method: 'POST', body: { token: reg.token } });
+  return { token: reg.token, spin: await req('/api/spin', { method: 'POST', body: { token: reg.token } }) };
 }
 
 test('phone numbers are normalised to one canonical key', () => {
@@ -72,51 +79,63 @@ test('weighted pick follows the configured percentages', () => {
   assert.equal(pickWinningSegment([{ id: 9, label: 'z', weight: 0 }]), null);
 });
 
-test('spin returns a prize and blocks a second spin for the same phone', async () => {
-  const first = await req('/api/spin', { method: 'POST', body: { name: 'Test Person', phone: '+961 70 111 222' } });
-  assert.equal(first.status, 200);
-  const data = await first.json();
-  assert.match(data.token, /^[a-f0-9]{48}$/);
+test('spin is refused until the Google review is confirmed', async () => {
+  const reg = await (await req('/api/entries', { method: 'POST', body: { name: 'No Review', phone: '70100100' } })).json();
+  assert.match(reg.token, /^[a-f0-9]{48}$/);
+  assert.equal(reg.reviewConfirmed, false);
+  const early = await req('/api/spin', { method: 'POST', body: { token: reg.token } });
+  assert.equal(early.status, 403, 'customer cannot spin without reviewing');
+});
+
+test('after the review is confirmed the spin works once', async () => {
+  const reg = await (await req('/api/entries', { method: 'POST', body: { name: 'Spin Once', phone: '70200200' } })).json();
+  await req('/api/review/click', { method: 'POST', body: { token: reg.token } });
+  await req('/api/review/confirm', { method: 'POST', body: { token: reg.token } });
+  const spin = await req('/api/spin', { method: 'POST', body: { token: reg.token } });
+  assert.equal(spin.status, 200);
+  const data = await spin.json();
   assert.ok(data.prize);
   assert.ok(Number.isInteger(data.segmentIndex) && data.segmentIndex >= 0);
-  assert.ok(data.googleReviewUrl.startsWith('https://'));
-
-  const again = await req('/api/spin', { method: 'POST', body: { name: 'Test Person', phone: '70111222' } });
-  assert.equal(again.status, 409, 'same phone with different formatting is still a duplicate');
+  const again = await req('/api/spin', { method: 'POST', body: { token: reg.token } });
+  assert.equal(again.status, 409, 'a second spin on the same entry is refused');
 });
 
-test('spin rejects bad input', async () => {
-  const badName = await req('/api/spin', { method: 'POST', body: { name: 'A', phone: '70999888' } });
-  assert.equal(badName.status, 400);
-  const badPhone = await req('/api/spin', { method: 'POST', body: { name: 'Valid Name', phone: 'nope' } });
-  assert.equal(badPhone.status, 400);
+test('same phone cannot register twice after spinning, but can resume before spinning', async () => {
+  const first = await (await req('/api/entries', { method: 'POST', body: { name: 'Resume Me', phone: '+961 70 300 300' } })).json();
+  const resumed = await (await req('/api/entries', { method: 'POST', body: { name: 'Resume Me', phone: '70300300' } })).json();
+  assert.equal(resumed.token, first.token, 'unspun number resumes the same entry');
+
+  await req('/api/review/confirm', { method: 'POST', body: { token: first.token } });
+  const spin = await req('/api/spin', { method: 'POST', body: { token: first.token } });
+  assert.equal(spin.status, 200);
+
+  const blocked = await req('/api/entries', { method: 'POST', body: { name: 'Resume Me', phone: '00961 70300300' } });
+  assert.equal(blocked.status, 409, 'after spinning, the number is blocked in any format');
 });
 
-test('review confirmation needs the private token and records the timestamps', async () => {
-  const spin = await (await req('/api/spin', { method: 'POST', body: { name: 'Reviewer', phone: '70555444' } })).json();
-  const click = await req('/api/review/click', { method: 'POST', body: { token: spin.token } });
-  assert.equal(click.status, 200);
-  const confirm = await req('/api/review/confirm', { method: 'POST', body: { token: spin.token } });
-  assert.equal(confirm.status, 200);
-  const row = db.prepare('SELECT review_clicked_at, review_confirmed_at FROM entries WHERE public_token = ?').get(spin.token);
-  assert.ok(row.review_clicked_at);
-  assert.ok(row.review_confirmed_at);
+test('review confirmed state survives a page reload (resume path)', async () => {
+  const reg = await (await req('/api/entries', { method: 'POST', body: { name: 'Reloaded', phone: '70400400' } })).json();
+  await req('/api/review/confirm', { method: 'POST', body: { token: reg.token } });
+  const again = await (await req('/api/entries', { method: 'POST', body: { name: 'Reloaded', phone: '70400400' } })).json();
+  assert.equal(again.reviewConfirmed, true);
+});
 
-  const bogus = await req('/api/review/confirm', { method: 'POST', body: { token: 'f'.repeat(48) } });
-  assert.equal(bogus.status, 404);
-  const malformed = await req('/api/review/confirm', { method: 'POST', body: { token: '123' } });
-  assert.equal(malformed.status, 400);
+test('bad input and unknown tokens are rejected', async () => {
+  assert.equal((await req('/api/entries', { method: 'POST', body: { name: 'A', phone: '70999888' } })).status, 400);
+  assert.equal((await req('/api/entries', { method: 'POST', body: { name: 'Valid Name', phone: 'nope' } })).status, 400);
+  assert.equal((await req('/api/spin', { method: 'POST', body: { token: '123' } })).status, 400);
+  assert.equal((await req('/api/spin', { method: 'POST', body: { token: 'f'.repeat(48) } })).status, 404);
+  assert.equal((await req('/api/review/confirm', { method: 'POST', body: { token: 'f'.repeat(48) } })).status, 404);
 });
 
 test('admin routes require a session', async () => {
   assert.equal((await req('/api/admin/entries')).status, 401);
   assert.equal((await req('/api/admin/segments')).status, 401);
-  assert.equal((await req('/api/admin/entries/export.xlsx')).status, 401);
+  assert.equal((await req('/api/admin/export.xlsx')).status, 401);
 });
 
 test('admin login: wrong password fails, correct password issues an HttpOnly cookie', async () => {
-  const bad = await login('jm', 'wrong');
-  assert.equal(bad.res.status, 401);
+  assert.equal((await login('jm', 'wrong')).res.status, 401);
   const good = await login('jm', 'test-pass-1');
   assert.equal(good.res.status, 200);
   assert.match(good.res.headers.get('set-cookie'), /HttpOnly/);
@@ -127,50 +146,74 @@ test('admin login: wrong password fails, correct password issues an HttpOnly coo
 
 test('all three admin accounts can log in', async () => {
   for (const [u, p] of [['jm', 'test-pass-1'], ['salma', 'test-pass-2'], ['rassif', 'test-pass-3']]) {
-    const r = await login(u, p);
-    assert.equal(r.res.status, 200, u);
+    assert.equal((await login(u, p)).res.status, 200, u);
   }
-  const count = db.prepare('SELECT COUNT(*) AS n FROM admins').get().n;
-  assert.equal(count, 3);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM admins').get().n, 3);
 });
 
-test('admin can list entries, see stats, and export an xlsx file', async () => {
+test('admin can list entries with status, search, and stats', async () => {
   const { cookie } = await login('salma', 'test-pass-2');
   const entries = await (await req('/api/admin/entries', { cookie })).json();
-  assert.ok(entries.entries.length >= 2);
-  const search = await (await req('/api/admin/entries?q=Reviewer', { cookie })).json();
+  assert.ok(entries.entries.length >= 4);
+  const statuses = new Set(entries.entries.map((e) => e.status));
+  assert.ok(statuses.has('تم الدوران'));
+  assert.ok(statuses.has('بانتظار التقييم'));
+  const search = await (await req('/api/admin/entries?q=Spin%20Once', { cookie })).json();
   assert.equal(search.entries.length, 1);
-
   const stats = await (await req('/api/admin/stats', { cookie })).json();
-  assert.ok(stats.entries >= 2);
-  assert.ok(stats.reviewConfirmed >= 1);
-
-  const xlsx = await req('/api/admin/entries/export.xlsx', { cookie });
-  assert.equal(xlsx.status, 200);
-  assert.match(xlsx.headers.get('content-type'), /spreadsheetml/);
-  const buf = Buffer.from(await xlsx.arrayBuffer());
-  assert.equal(buf.slice(0, 2).toString(), 'PK', 'xlsx is a zip container');
+  assert.ok(stats.entries >= 4);
+  assert.ok(stats.spins >= 1);
 });
 
-test('admin can add, reweight, reorder, and delete wheel fields', async () => {
+test('export is a workbook with entries, summary, wheel fields and links', async () => {
+  const { cookie } = await login('salma', 'test-pass-2');
+  const xlsx = await req('/api/admin/export.xlsx', { cookie });
+  assert.equal(xlsx.status, 200);
+  assert.match(xlsx.headers.get('content-type'), /spreadsheetml/);
+  assert.match(xlsx.headers.get('content-disposition'), /rassif-spin-export-\d{4}-\d{2}-\d{2}\.xlsx/);
+  const buf = Buffer.from(await xlsx.arrayBuffer());
+  assert.equal(buf.slice(0, 2).toString(), 'PK', 'xlsx is a zip container');
+
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(buf);
+  assert.deepEqual(wb.worksheets.map((w) => w.name), ['Entries', 'Summary', 'Wheel fields', 'Links']);
+  const entriesSheet = wb.getWorksheet('Entries');
+  assert.ok(entriesSheet.rowCount >= 5, 'header plus at least four entries');
+  assert.equal(wb.getWorksheet('Wheel fields').rowCount, 5, 'header plus four fields');
+  assert.equal(wb.getWorksheet('Links').rowCount, 4, 'header plus three links');
+});
+
+test('wheel is capped at four fields and the admin can manage them', async () => {
   const { cookie } = await login('rassif', 'test-pass-3');
   const before = await (await req('/api/admin/segments', { cookie })).json();
-  const add = await req('/api/admin/segments', { method: 'POST', cookie, body: { label: 'اختبار', weight: 5 } });
-  assert.equal(add.status, 201);
-  const after = await add.json();
-  assert.equal(after.segments.length, before.segments.length + 1);
+  assert.equal(before.segments.length, 4, 'default wheel has exactly four fields');
 
-  const newId = after.segments[after.segments.length - 1].id;
-  const put = await req(`/api/admin/segments/${newId}`, { method: 'PUT', cookie, body: { label: 'اختبار 2', weight: 150 } });
+  const full = await req('/api/admin/segments', { method: 'POST', cookie, body: { label: 'خامسة', weight: 5 } });
+  assert.equal(full.status, 400, 'a fifth field is refused');
+
+  const newId = before.segments[0].id;
+  const put = await req(`/api/admin/segments/${newId}`, { method: 'PUT', cookie, body: { label: 'قهوة', weight: 150 } });
   assert.equal(put.status, 400, 'weight above 100 is rejected');
 
   const reorder = await req('/api/admin/segments/reorder', {
-    method: 'POST', cookie, body: { ids: after.segments.map((s) => s.id).reverse() },
+    method: 'POST', cookie, body: { ids: before.segments.map((s) => s.id).reverse() },
   });
   assert.equal(reorder.status, 200);
 
   const del = await req(`/api/admin/segments/${newId}`, { method: 'DELETE', cookie });
-  assert.equal((await del.json()).segments.length, before.segments.length);
+  assert.equal((await del.json()).segments.length, 3);
+
+  const add = await req('/api/admin/segments', { method: 'POST', cookie, body: { label: 'بديلة', weight: 10 } });
+  assert.equal(add.status, 201);
+  assert.equal((await add.json()).segments.length, 4, 'back to four after replacing one');
+});
+
+test('public spin uses only active wheel fields', async () => {
+  const cfg = await (await req('/api/config')).json();
+  assert.equal(cfg.segments.length, 4);
+  const { spin } = await completeFlow('Config Check', '70500500');
+  const data = await spin.json();
+  assert.ok(cfg.segments.some((s) => s.label === data.prize));
 });
 
 test('admin can update the three public links, and bad URLs are rejected', async () => {
@@ -183,29 +226,24 @@ test('admin can update the three public links, and bad URLs are rejected', async
   assert.equal(ok.status, 200);
   const cfg = await (await req('/api/config')).json();
   assert.equal(cfg.links.googleReview, 'https://g.page/r/CRSQUQQ37K15EBM/review');
+  assert.ok(cfg.links.instagram.startsWith('https://'));
+  assert.ok(cfg.links.facebook.startsWith('https://'));
 });
 
 test('password change requires the current password and logs the admin out', async () => {
   const { cookie } = await login('salma', 'test-pass-2');
-  const wrong = await req('/api/admin/users/me/password', {
-    method: 'POST', cookie, body: { current: 'nope', next: 'new-password-1' },
-  });
+  const wrong = await req('/api/admin/users/me/password', { method: 'POST', cookie, body: { current: 'nope', next: 'new-password-1' } });
   assert.equal(wrong.status, 401);
-  const short = await req('/api/admin/users/me/password', {
-    method: 'POST', cookie, body: { current: 'test-pass-2', next: 'short' },
-  });
+  const short = await req('/api/admin/users/me/password', { method: 'POST', cookie, body: { current: 'test-pass-2', next: 'short' } });
   assert.equal(short.status, 400);
-  const ok = await req('/api/admin/users/me/password', {
-    method: 'POST', cookie, body: { current: 'test-pass-2', next: 'new-password-2' },
-  });
+  const ok = await req('/api/admin/users/me/password', { method: 'POST', cookie, body: { current: 'test-pass-2', next: 'new-password-2' } });
   assert.equal(ok.status, 200);
   assert.equal((await req('/api/admin/me', { cookie })).status, 401);
   assert.equal((await login('salma', 'new-password-2')).res.status, 200);
 });
 
 test('stored passwords are hashed, never plaintext', () => {
-  const rows = db.prepare('SELECT password_hash FROM admins').all();
-  for (const r of rows) {
+  for (const r of db.prepare('SELECT password_hash FROM admins').all()) {
     assert.match(r.password_hash, /^scrypt\$/);
     assert.ok(!/test-pass/.test(r.password_hash));
   }

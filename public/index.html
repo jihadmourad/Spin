@@ -2,9 +2,10 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#FFD300">
   <title>رصيف | دوّر العجلة واربح</title>
-  <meta name="description" content="دوّر العجلة واربح جائزة من رصيف.">
+  <meta name="description" content="سجّل بياناتك، اترك تقييماً لنا على Google، ثم دوّر العجلة واربح جائزة من رصيف. Spin the wheel and win at Rassif.">
   <link rel="icon" href="/assets/logo-black.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -13,66 +14,94 @@
 </head>
 <body>
   <header class="site-header">
-    <img class="logo" src="/assets/logo-black.png" alt="رصيف">
+    <img class="logo" src="/assets/logo-color.png" alt="رصيف">
+    <button type="button" class="lang-toggle" id="lang-toggle" data-i18n="lang.switch">English</button>
   </header>
 
   <main class="container">
-    <section class="intro" id="intro">
-      <h1>دوّر العجلة واربح</h1>
-      <p class="lead">أدخل اسمك ورقم هاتفك، ثم دوّر العجلة.</p>
+    <section class="intro anim-in" id="intro">
+      <h1 data-i18n="intro.h1">دوّر العجلة واربح</h1>
+      <p class="lead" data-i18n="intro.lead">ثلاث خطوات بسيطة، ثم فرصتك للفوز.</p>
     </section>
 
-    <section class="card" id="step-form">
+    <ol class="steps" id="steps">
+      <li class="active" data-step="1"><span>1</span> <b data-i18n="steps.1">البيانات</b></li>
+      <li data-step="2"><span>2</span> <b data-i18n="steps.2">التقييم</b></li>
+      <li data-step="3"><span>3</span> <b data-i18n="steps.3">الدوران</b></li>
+    </ol>
+
+    <section class="card anim-in" id="step-form">
+      <h2 class="step-title" data-i18n="form.title">أدخل بياناتك</h2>
       <form id="entry-form" novalidate>
         <label>
-          <span>الاسم</span>
+          <span data-i18n="form.name">الاسم</span>
           <input name="name" type="text" autocomplete="name" maxlength="60" required>
         </label>
         <label>
-          <span>رقم الهاتف</span>
+          <span data-i18n="form.phone">رقم الهاتف</span>
           <input name="phone" type="tel" inputmode="tel" autocomplete="tel" maxlength="20" dir="ltr" required>
         </label>
         <p class="error" id="form-error" role="alert" hidden></p>
-        <button type="submit" class="btn btn-primary" id="spin-btn">دوّر العجلة</button>
+        <button type="submit" class="btn btn-primary btn-lg" id="form-btn" data-i18n="form.btn">متابعة</button>
       </form>
     </section>
 
-    <section class="wheel-wrap" id="wheel-section" hidden>
-      <div class="pointer" aria-hidden="true"></div>
-      <canvas id="wheel" width="600" height="600" aria-label="عجلة الحظ"></canvas>
+    <section class="card anim-in" id="step-review" hidden>
+      <h2 class="step-title" data-i18n="review.title">اترك تقييماً لنا على Google</h2>
+      <p class="muted" data-i18n="review.text">لا يمكن الدوران قبل ترك التقييم. اضغط الزر، اكتب تقييمك، ثم ارجع إلى هذه الصفحة وأكّد.</p>
+      <a class="btn btn-outline btn-lg" id="review-link" href="#" target="_blank" rel="noopener" data-i18n="review.link">اترك تقييماً على Google</a>
+      <button class="btn btn-primary btn-lg" id="confirm-review-btn" type="button" data-i18n="review.confirm">لقد تركت التقييم</button>
+      <p class="error" id="review-error" role="alert" hidden></p>
     </section>
 
-    <section class="card result" id="step-result" hidden>
-      <p class="eyebrow">مبروك!</p>
-      <h2 id="prize-label"></h2>
-      <div class="review-step">
-        <p>خطوة أخيرة لاستلام جائزتك: اترك تقييماً لنا على Google.</p>
-        <a class="btn btn-outline" id="review-link" href="#" target="_blank" rel="noopener">اترك تقييماً على Google</a>
-        <button class="btn btn-primary" id="confirm-review-btn" type="button">لقد تركت التقييم</button>
-        <p class="error" id="review-error" role="alert" hidden></p>
+    <section class="wheel-wrap anim-in" id="step-wheel" hidden>
+      <h2 class="step-title" data-i18n="wheel.title">دوّر العجلة</h2>
+      <div class="wheel-stage">
+        <div class="wheel-glow" aria-hidden="true"></div>
+        <div class="pointer" aria-hidden="true"></div>
+        <canvas id="wheel" width="600" height="600" data-i18n-aria="wheel.aria" aria-label="عجلة الحظ"></canvas>
       </div>
+      <button class="btn btn-primary btn-lg btn-spin" id="spin-btn" type="button" data-i18n="wheel.spin">دوّر الآن</button>
+      <p class="error" id="spin-error" role="alert" hidden></p>
     </section>
 
-    <section class="card result" id="step-done" hidden>
-      <p class="eyebrow">شكراً لك</p>
-      <h2>تم تسجيل جائزتك</h2>
-      <p id="done-prize"></p>
+    <section class="card result win-card anim-in" id="step-win" hidden>
+      <p class="eyebrow" data-i18n="win.eyebrow">مبروك!</p>
+      <p class="win-line"><span data-i18n="win.prize">ربحت</span></p>
+      <h2 class="prize-text" id="win-prize"></h2>
+      <p class="muted" data-i18n="win.show">أظهر هذه الشاشة للفريق لاستلام جائزتك.</p>
     </section>
 
-    <section class="card notice" id="step-used" hidden>
+    <section class="card result lose-card anim-in" id="step-lose" hidden>
+      <p class="eyebrow" data-i18n="lose.eyebrow">حظاً أوفر</p>
+      <h2 data-i18n="lose.title">ليس هذه المرة</h2>
+      <p class="muted" data-i18n="lose.text">لم تربح هذه المرة، لكن شكراً لتقييمك وزيارتك رصيف. نراك قريباً!</p>
+    </section>
+
+    <section class="card notice anim-in" id="step-used" hidden>
+      <h2 data-i18n="used.title">تمت المشاركة</h2>
       <p id="used-msg"></p>
     </section>
   </main>
 
   <footer class="site-footer">
-    <nav class="social" aria-label="روابط التواصل">
-      <a href="#" id="link-instagram" target="_blank" rel="noopener">Instagram</a>
-      <a href="#" id="link-facebook" target="_blank" rel="noopener">Facebook</a>
+    <p class="follow" data-i18n="follow">تابعنا</p>
+    <nav class="social" aria-label="Social">
+      <a class="social-btn" id="link-instagram" href="#" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="17.5" cy="6.5" r="1.2" fill="currentColor"/></svg>
+        <span>Instagram</span>
+      </a>
+      <a class="social-btn" id="link-facebook" href="#" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M14 8V6.5c0-.8.4-1.2 1.2-1.2H17V2h-2.6C11.9 2 11 3.6 11 5.6V8H8.5v3.5H11V22h3V11.5h2.7L17.5 8z"/></svg>
+        <span>Facebook</span>
+      </a>
     </nav>
-    <p class="brand-line">Rassif Brandbook</p>
+    <p class="brand-line" data-i18n="brand">رصيف · Rassif</p>
   </footer>
 
+  <script src="/js/i18n.js"></script>
   <script src="/js/wheel.js"></script>
+  <script src="/js/celebrate.js"></script>
   <script src="/js/site.js"></script>
 </body>
 </html>
