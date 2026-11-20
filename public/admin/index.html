@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>رصيف | لوحة التحكم</title>
+  <link rel="icon" href="/assets/logo-black.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&family=Rubik:wght@400;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="admin-body">
+  <!-- Login -->
+  <main id="login-view" hidden>
+    <div class="login-box">
+      <img class="logo" src="/assets/logo-black.png" alt="رصيف">
+      <h1>لوحة التحكم</h1>
+      <form id="login-form" novalidate>
+        <label>
+          <span>اسم المستخدم</span>
+          <input type="text" name="username" autocomplete="username" required>
+        </label>
+        <label>
+          <span>كلمة المرور</span>
+          <input type="password" name="password" autocomplete="current-password" required>
+        </label>
+        <p class="error" id="login-error" role="alert" hidden></p>
+        <button class="btn btn-primary" type="submit">دخول</button>
+      </form>
+    </div>
+  </main>
+
+  <!-- App -->
+  <div id="app-view" hidden>
+    <header class="admin-top">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <img class="logo-sm" src="/assets/logo-white.png" alt="رصيف">
+        <span class="who">لوحة التحكم</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <span class="who" id="who"></span>
+        <button type="button" id="logout-btn">خروج</button>
+      </div>
+    </header>
+
+    <div class="admin-wrap">
+      <nav class="tabs" role="tablist">
+        <button type="button" role="tab" data-tab="entries" aria-selected="true">المشاركات</button>
+        <button type="button" role="tab" data-tab="wheel" aria-selected="false">خانات العجلة</button>
+        <button type="button" role="tab" data-tab="settings" aria-selected="false">الروابط</button>
+        <button type="button" role="tab" data-tab="users" aria-selected="false">المستخدمون</button>
+      </nav>
+
+      <!-- Entries -->
+      <section class="panel active" id="tab-entries">
+        <div class="stats" id="stats"></div>
+        <div class="toolbar">
+          <input type="text" id="search" placeholder="بحث بالاسم أو الهاتف" aria-label="بحث">
+          <span class="spacer"></span>
+          <button type="button" class="btn-export" id="export-btn">تصدير Excel</button>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>الاسم</th>
+                <th>الهاتف</th>
+                <th>الجائزة</th>
+                <th>تاريخ المشاركة</th>
+                <th>نقر على التقييم</th>
+                <th>أكّد التقييم</th>
+              </tr>
+            </thead>
+            <tbody id="entries-body"></tbody>
+          </table>
+        </div>
+        <p class="ok-msg" id="entries-count"></p>
+      </section>
+
+      <!-- Wheel segments -->
+      <section class="panel" id="tab-wheel">
+        <p>كل خانة لها نسبة (%) تحدد احتمال ظهورها. مجموع النسب للخانات الفعّالة يجب أن يكون 100%.</p>
+        <p class="total-line" id="seg-total"></p>
+        <div class="table-scroll">
+          <table class="seg-table">
+            <thead>
+              <tr>
+                <th>الترتيب</th>
+                <th>اسم الخانة</th>
+                <th>النسبة %</th>
+                <th>فعّالة</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="seg-body"></tbody>
+          </table>
+        </div>
+        <h3 style="margin-top:28px;">إضافة خانة</h3>
+        <form id="seg-add" class="form-card" novalidate>
+          <label><span>اسم الخانة</span><input type="text" name="label" maxlength="40" required></label>
+          <label><span>النسبة %</span><input type="number" name="weight" min="0" max="100" step="1" value="10" required></label>
+          <p class="error" id="seg-add-error" role="alert" hidden></p>
+          <button class="btn btn-primary" type="submit">إضافة</button>
+        </form>
+      </section>
+
+      <!-- Settings -->
+      <section class="panel" id="tab-settings">
+        <form id="settings-form" class="form-card" novalidate>
+          <label><span>رابط Instagram</span><input type="text" name="instagram_url" dir="ltr"></label>
+          <label><span>رابط Facebook</span><input type="text" name="facebook_url" dir="ltr"></label>
+          <label><span>رابط تقييم Google</span><input type="text" name="google_review_url" dir="ltr"></label>
+          <p class="error" id="settings-error" role="alert" hidden></p>
+          <p class="ok-msg" id="settings-ok" hidden>تم الحفظ</p>
+          <button class="btn btn-primary" type="submit">حفظ الروابط</button>
+        </form>
+      </section>
+
+      <!-- Users -->
+      <section class="panel" id="tab-users">
+        <h3>المستخدمون الإداريون</h3>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>اسم المستخدم</th><th>تاريخ الإنشاء</th></tr></thead>
+            <tbody id="users-body"></tbody>
+          </table>
+        </div>
+        <h3 style="margin-top:28px;">تغيير كلمة المرور</h3>
+        <form id="pw-form" class="form-card" novalidate>
+          <label><span>كلمة المرور الحالية</span><input type="password" name="current" autocomplete="current-password" required></label>
+          <label><span>كلمة المرور الجديدة (8 أحرف على الأقل)</span><input type="password" name="next" autocomplete="new-password" minlength="8" required></label>
+          <label><span>تأكيد كلمة المرور الجديدة</span><input type="password" name="confirm" autocomplete="new-password" minlength="8" required></label>
+          <p class="error" id="pw-error" role="alert" hidden></p>
+          <p class="ok-msg" id="pw-ok" hidden></p>
+          <button class="btn btn-primary" type="submit">تحديث</button>
+        </form>
+      </section>
+    </div>
+  </div>
+
+  <script src="/admin/admin.js"></script>
+</body>
+</html>

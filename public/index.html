@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>رصيف | دوّر العجلة واربح</title>
+  <meta name="description" content="دوّر العجلة واربح جائزة من رصيف.">
+  <link rel="icon" href="/assets/logo-black.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&family=Rubik:wght@400;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <img class="logo" src="/assets/logo-black.png" alt="رصيف">
+  </header>
+
+  <main class="container">
+    <section class="intro" id="intro">
+      <h1>دوّر العجلة واربح</h1>
+      <p class="lead">أدخل اسمك ورقم هاتفك، ثم دوّر العجلة.</p>
+    </section>
+
+    <section class="card" id="step-form">
+      <form id="entry-form" novalidate>
+        <label>
+          <span>الاسم</span>
+          <input name="name" type="text" autocomplete="name" maxlength="60" required>
+        </label>
+        <label>
+          <span>رقم الهاتف</span>
+          <input name="phone" type="tel" inputmode="tel" autocomplete="tel" maxlength="20" dir="ltr" required>
+        </label>
+        <p class="error" id="form-error" role="alert" hidden></p>
+        <button type="submit" class="btn btn-primary" id="spin-btn">دوّر العجلة</button>
+      </form>
+    </section>
+
+    <section class="wheel-wrap" id="wheel-section" hidden>
+      <div class="pointer" aria-hidden="true"></div>
+      <canvas id="wheel" width="600" height="600" aria-label="عجلة الحظ"></canvas>
+    </section>
+
+    <section class="card result" id="step-result" hidden>
+      <p class="eyebrow">مبروك!</p>
+      <h2 id="prize-label"></h2>
+      <div class="review-step">
+        <p>خطوة أخيرة لاستلام جائزتك: اترك تقييماً لنا على Google.</p>
+        <a class="btn btn-outline" id="review-link" href="#" target="_blank" rel="noopener">اترك تقييماً على Google</a>
+        <button class="btn btn-primary" id="confirm-review-btn" type="button">لقد تركت التقييم</button>
+        <p class="error" id="review-error" role="alert" hidden></p>
+      </div>
+    </section>
+
+    <section class="card result" id="step-done" hidden>
+      <p class="eyebrow">شكراً لك</p>
+      <h2>تم تسجيل جائزتك</h2>
+      <p id="done-prize"></p>
+    </section>
+
+    <section class="card notice" id="step-used" hidden>
+      <p id="used-msg"></p>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <nav class="social" aria-label="روابط التواصل">
+      <a href="#" id="link-instagram" target="_blank" rel="noopener">Instagram</a>
+      <a href="#" id="link-facebook" target="_blank" rel="noopener">Facebook</a>
+    </nav>
+    <p class="brand-line">Rassif Brandbook</p>
+  </footer>
+
+  <script src="/js/wheel.js"></script>
+  <script src="/js/site.js"></script>
+</body>
+</html>
