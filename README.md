@@ -20,12 +20,12 @@ Requires Node.js 22.13 or newer (uses the built-in `node:sqlite`).
 
 ```bash
 npm install
-ADMIN_USERS='[{"username":"...","password":"..."},{"username":"...","password":"..."},{"username":"...","password":"..."}]' npm run seed:admins
+ADMIN_USERS='jm:first-password,salma:second-password,Rassif:third-password' npm run seed:admins
 npm start          # http://localhost:3000  (admin: /admin)
 npm test
 ```
 
-`seed:admins` creates or updates exactly the accounts you pass in `ADMIN_USERS`. Passwords are never written to the repository and are stored hashed (scrypt). Run it again whenever you want to reset a password.
+`seed:admins` creates or updates exactly the accounts you pass in `ADMIN_USERS`, as `username:password` pairs separated by commas (a JSON array also works). Passwords in the simple format must not contain commas. Passwords are never written to the repository and are stored hashed (scrypt). Run it again whenever you want to reset a password.
 
 Environment variables:
 
