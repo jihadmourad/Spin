@@ -5,7 +5,7 @@
     "buildCommand": "npm install"
   },
   "deploy": {
-    "startCommand": "npm start",
+    "startCommand": "npm run seed:admins || true; npm start",
     "healthcheckPath": "/api/config",
     "healthcheckTimeout": 60,
     "restartPolicyType": "ON_FAILURE"
